@@ -1,5 +1,7 @@
 use std::io::{Read, Write};
 
+use clipboard_server::{END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT};
+
 #[derive(Debug)]
 enum ClipboardContent {
     Text(String),
@@ -13,7 +15,9 @@ impl ClipboardContent {
     ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             ClipboardContent::Text(text) => {
-                stream.write(format!("0\r\n{}", text.len()).as_bytes())?; // 0 text_length
+                stream.write(
+                    format!("{}{}{}{}", TYPE_TEXT, NEW_LINE, text.len(), END_OF_MSG).as_bytes(),
+                )?;
                 Ok(())
             }
             ClipboardContent::File(path) => {
@@ -21,9 +25,13 @@ impl ClipboardContent {
                 let metadata = std::fs::metadata(path)?;
                 stream.write(
                     format!(
-                        "1\r\n{}\r\n{}", // 1 file_size file_name
+                        "{}{}{}{}{}{}", // 1 file_size file_name
+                        TYPE_FILE,
+                        NEW_LINE,
                         metadata.len(),
-                        path.file_name().unwrap().to_str().unwrap()
+                        NEW_LINE,
+                        path.file_name().unwrap().to_str().unwrap(),
+                        END_OF_MSG
                     )
                     .as_bytes(),
                 )?;
