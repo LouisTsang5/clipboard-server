@@ -91,7 +91,15 @@ fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let port = 3001;
+    // Read env
+    dotenvy::dotenv()?;
+    let port = std::env::var("PORT")
+        .expect("Variable PORT is not set")
+        .parse::<u16>()
+        .expect("PORT must be a non negative integer");
+
+    // Start server
+    println!("Listening on port {}...", port);
     let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {
