@@ -1,9 +1,53 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 #[derive(Debug)]
 enum ClipboardContent {
-    String(String),
+    Text(String),
     File(String),
+}
+
+impl ClipboardContent {
+    fn write_metadata(
+        &self,
+        stream: &mut std::net::TcpStream,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            ClipboardContent::Text(text) => {
+                stream.write(format!("0\r\n{}", text.len()).as_bytes())?; // 0 text_length
+                Ok(())
+            }
+            ClipboardContent::File(path) => {
+                let path = std::path::Path::new(path);
+                let metadata = std::fs::metadata(path)?;
+                stream.write(
+                    format!(
+                        "1\r\n{}\r\n{}", // 1 file_size file_name
+                        metadata.len(),
+                        path.file_name().unwrap().to_str().unwrap()
+                    )
+                    .as_bytes(),
+                )?;
+                Ok(())
+            }
+        }
+    }
+
+    fn write_content(
+        &self,
+        stream: &mut std::net::TcpStream,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match self {
+            ClipboardContent::Text(text) => {
+                stream.write_all(text.as_bytes())?;
+                Ok(())
+            }
+            ClipboardContent::File(path) => {
+                let mut file = std::fs::File::open(path)?;
+                std::io::copy(&mut file, stream)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error>> {
@@ -22,14 +66,27 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
     {
         Ok(ClipboardContent::File(String::from(&clipboard[7..])))
     } else {
-        Ok(ClipboardContent::String(clipboard.to_string()))
+        Ok(ClipboardContent::Text(clipboard.to_string()))
     }
 }
 
 fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error::Error>> {
-    let msg = get_clipboard_content()?;
-    let msg = format!("{:?}", msg);
-    stream.write(msg.as_bytes())?;
+    // Read the current clipboard
+    let clipboard_content = get_clipboard_content()?;
+
+    // Send the metadata
+    clipboard_content.write_metadata(&mut stream)?;
+
+    // Read client response of if it wants to get the content or not
+    let mut response: [u8; 1] = [0];
+    stream.read_exact(&mut response)?;
+    dbg!(response);
+
+    // Stream the content if true
+    if response[0] != 0 {
+        clipboard_content.write_content(&mut stream)?;
+    }
+
     Ok(())
 }
 
