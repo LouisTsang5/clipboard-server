@@ -88,7 +88,6 @@ fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error
     // Read client response of if it wants to get the content or not
     let mut response: [u8; 1] = [0];
     stream.read_exact(&mut response)?;
-    dbg!(response);
 
     // Stream the content if true
     if response[0] != 0 {
