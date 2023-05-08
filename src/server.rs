@@ -90,6 +90,14 @@ fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error
     stream.read_exact(&mut response)?;
 
     // Stream the content if true
+    match &clipboard_content {
+        ClipboardContent::Text(s) => println!(
+            "Sending text to {} (Length: {})",
+            &stream.peer_addr()?,
+            s.len()
+        ),
+        ClipboardContent::File(p) => println!("Sending file {} to {}", p, &stream.peer_addr()?),
+    }
     if response[0] != 0 {
         clipboard_content.write_content(&mut stream)?;
     }
