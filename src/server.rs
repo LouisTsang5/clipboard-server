@@ -92,18 +92,29 @@ fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error
 
     // Stream the content if true
     match &clipboard_content {
-        ClipboardContent::Text(s) => println!(
+        ClipboardContent::Text(s) => log(format!(
             "Sending text to {} (Length: {})",
             &stream.peer_addr()?,
             s.len()
-        ),
-        ClipboardContent::File(p) => println!("Sending file {} to {}", p, &stream.peer_addr()?),
+        )
+        .as_str()),
+        ClipboardContent::File(p) => {
+            log(format!("Sending file {} to {}", p, &stream.peer_addr()?).as_str())
+        }
     }
     if response[0] != 0 {
         clipboard_content.write_content(&mut stream)?;
     }
 
     Ok(())
+}
+
+fn log(msg: &str) {
+    println!(
+        "[{}] {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        msg
+    );
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -115,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("PORT must be a non negative integer");
 
     // Start server
-    println!("Listening on port {}...", port);
+    log(format!("Listening on port {}...", port).as_str());
     let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {

@@ -15,5 +15,6 @@ path = "src/client.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = "0.4.24"
 dotenvy = "0.15.7"
 urlencoding = "2.1.2"
