@@ -72,7 +72,8 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
     if clipboard.len() >= FILE_URL_PREFIX.len()
         && &clipboard[0..FILE_URL_PREFIX.len()] == FILE_URL_PREFIX
     {
-        Ok(ClipboardContent::File(String::from(&clipboard[7..])))
+        let path = urlencoding::decode(&clipboard[7..]).unwrap();
+        Ok(ClipboardContent::File(String::from(path)))
     } else {
         Ok(ClipboardContent::Text(clipboard.to_string()))
     }

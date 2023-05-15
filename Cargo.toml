@@ -16,3 +16,4 @@ path = "src/client.rs"
 
 [dependencies]
 dotenvy = "0.15.7"
+urlencoding = "2.1.2"
