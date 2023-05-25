@@ -241,17 +241,25 @@ impl<'a, R: std::io::Read> std::io::Read for DecryptionStream<'a, R> {
             // Read encrypted bytes
             let enc_block_size = EncryptionBlock::enc_block_size(self.block_size);
             let mut buff = vec![0u8; enc_block_size];
-            let bytes_read = self.stream.read(&mut buff)?;
-            if bytes_read <= 0 {
+            let mut total_bytes_read = 0;
+            loop {
+                let bytes_read = self.stream.read(&mut buff[total_bytes_read..])?;
+                total_bytes_read += bytes_read;
+                if bytes_read <= 0 || total_bytes_read >= enc_block_size {
+                    break;
+                }
+            }
+
+            // Return EOF if no bytes can be read
+            if total_bytes_read <= 0 {
                 return Ok(0);
             }
-            if bytes_read < enc_block_size {
+
+            // Return Unexpected EOF if total bytes are not equal to enc_block_size
+            if total_bytes_read < enc_block_size {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::UnexpectedEof,
-                    format!(
-                        "Unexpected end of stream. Expected {} bytes. Read {} bytes instead",
-                        enc_block_size, bytes_read
-                    ),
+                    format!("Unexpected EOF while reading ciphertext (Expected {} bytes. Read {} bytes instead)", enc_block_size, total_bytes_read),
                 ));
             }
 
