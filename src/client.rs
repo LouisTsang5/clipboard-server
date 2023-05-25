@@ -86,6 +86,7 @@ fn write_to_file(
     name: &str,
     size: usize,
 ) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut stream = DecryptionStream::new(PASSWORD, stream)?;
     let cur_dir = std::env::current_dir()?;
     let file_path = cur_dir.join(name);
     let mut file = std::fs::File::create(file_path)?;
@@ -121,6 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match metadata {
         Metadata::Text { size: _ } => {
             let mut stdout = std::io::stdout();
+            let mut stream = DecryptionStream::new(PASSWORD, &mut stream)?;
             std::io::copy(&mut stream, &mut stdout)?;
             stdout.write("\n".as_bytes())?;
         }

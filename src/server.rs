@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::Read;
 
 use clipboard_server::{
     enc::EncryptionStream, ENC_BLOCK_SIZE, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_FILE, TYPE_TEXT,
@@ -45,18 +45,14 @@ impl ClipboardContent {
     fn write_content(
         &self,
         stream: &mut std::net::TcpStream,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        match self {
-            ClipboardContent::Text(text) => {
-                stream.write_all(text.as_bytes())?;
-                Ok(())
-            }
-            ClipboardContent::File(path) => {
-                let mut file = std::fs::File::open(path)?;
-                std::io::copy(&mut file, stream)?;
-                Ok(())
-            }
-        }
+    ) -> Result<usize, Box<dyn std::error::Error>> {
+        let mut msg_stream: Box<dyn Read> = match self {
+            ClipboardContent::Text(text) => Box::new(std::io::Cursor::new(text)),
+            ClipboardContent::File(path) => Box::new(std::fs::File::open(path)?),
+        };
+        let mut msg_stream = EncryptionStream::new(PASSWORD, &mut msg_stream, ENC_BLOCK_SIZE);
+        let bytes_sent = std::io::copy(&mut msg_stream, stream)?;
+        Ok(bytes_sent as usize)
     }
 }
 
