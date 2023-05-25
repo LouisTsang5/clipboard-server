@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 
 use clipboard_server::{
     enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, TYPE_TEXT,
@@ -93,6 +93,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut total_bytes_read = 0;
             while total_bytes_read < size {
                 let bytes_read = dec_stream.read(&mut buff)?;
+                if bytes_read == 0 {
+                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+                }
                 file.write(&buff[..bytes_read])?;
                 total_bytes_read += bytes_read;
                 print_progress(total_bytes_read as f32 / size as f32, 50);
