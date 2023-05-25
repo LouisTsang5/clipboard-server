@@ -1,22 +1,13 @@
 use std::io::{Read, Write};
 
-use clipboard_server::{enc::DecryptionStream, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_TEXT};
+use clipboard_server::{
+    enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_TEXT,
+};
 
 #[derive(Debug)]
 enum Metadata {
     Text { size: usize },
     File { name: String, size: usize },
-}
-
-fn find_indices(s: &str, target: &str) -> Vec<usize> {
-    let mut indices = Vec::new();
-    let mut start = 0;
-    while let Some(pos) = s[start..].find(target) {
-        let index = start + pos;
-        indices.push(index);
-        start = index + target.len();
-    }
-    indices
 }
 
 fn get_size(metadata_str: &str) -> Result<usize, Box<dyn std::error::Error>> {
@@ -37,10 +28,7 @@ fn get_filename(metadata_str: &str) -> Result<String, String> {
     Ok(filename.to_string())
 }
 
-fn read_metadata(stream: &mut std::net::TcpStream) -> Result<Metadata, Box<dyn std::error::Error>> {
-    // Construct decryption stream
-    let mut stream = DecryptionStream::new(PASSWORD, stream)?;
-
+fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::Error>> {
     // Read until end of message to buffer
     let mut buf: Vec<u8> = Vec::new();
     loop {
@@ -66,43 +54,6 @@ fn read_metadata(stream: &mut std::net::TcpStream) -> Result<Metadata, Box<dyn s
     }
 }
 
-fn print_progress(percentage: f32, bar_width: usize) {
-    // dbg!(percentage);
-    let num_bars = (percentage * bar_width as f32) as usize;
-    let bar_str = format!(
-        "{:.1}%[{}{}{}]\r",
-        percentage * 100 as f32,
-        "=".repeat(num_bars),
-        ">",
-        " ".repeat(bar_width - num_bars)
-    );
-    let mut stdout = std::io::stdout();
-    stdout.write(&bar_str.as_bytes()).unwrap();
-    stdout.flush().unwrap();
-}
-
-fn write_to_file(
-    stream: &mut std::net::TcpStream,
-    name: &str,
-    size: usize,
-) -> Result<usize, Box<dyn std::error::Error>> {
-    let mut stream = DecryptionStream::new(PASSWORD, stream)?;
-    let cur_dir = std::env::current_dir()?;
-    let file_path = cur_dir.join(name);
-    let mut file = std::fs::File::create(file_path)?;
-
-    let mut buff = [0; 1024];
-    let mut total_bytes_read = 0;
-    while total_bytes_read < size {
-        let bytes_read = stream.read(&mut buff)?;
-        file.write(&buff[..bytes_read])?;
-        total_bytes_read += bytes_read;
-        print_progress(total_bytes_read as f32 / size as f32, 50);
-    }
-
-    Ok(total_bytes_read)
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read env
     dotenvy::dotenv()?;
@@ -113,22 +64,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Open connection
     let mut stream = std::net::TcpStream::connect(target)?;
-    let metadata = read_metadata(&mut stream)?;
+
+    // Read metadata
+    let metadata = {
+        let mut dec_stream = DecryptionStream::new(PASSWORD, &mut stream)?;
+        read_metadata(&mut dec_stream)?
+    };
 
     // Send response
     stream.write("1".as_bytes())?;
 
     // Handle binary
+    let mut dec_stream = DecryptionStream::new(PASSWORD, &mut stream)?;
     match metadata {
-        Metadata::Text { size: _ } => {
+        Metadata::Text { size } => {
             let mut stdout = std::io::stdout();
-            let mut stream = DecryptionStream::new(PASSWORD, &mut stream)?;
-            std::io::copy(&mut stream, &mut stdout)?;
-            stdout.write("\n".as_bytes())?;
+            std::io::copy(&mut dec_stream, &mut stdout)?;
+            println!("\nMessage len: {}", size);
         }
         Metadata::File { name, size } => {
-            println!("File: {}", name);
-            write_to_file(&mut stream, &name, size)?;
+            println!("Getting {}...", name);
+            let cur_dir = std::env::current_dir()?;
+            let file_path = cur_dir.join(&name);
+            let mut file = std::fs::File::create(file_path)?;
+
+            let mut buff = [0; 1024];
+            let mut total_bytes_read = 0;
+            while total_bytes_read < size {
+                let bytes_read = dec_stream.read(&mut buff)?;
+                file.write(&buff[..bytes_read])?;
+                total_bytes_read += bytes_read;
+                print_progress(total_bytes_read as f32 / size as f32, 50);
+            }
+            println!("");
         }
     }
 
