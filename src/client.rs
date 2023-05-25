@@ -54,7 +54,7 @@ fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn request() -> Result<(), Box<dyn std::error::Error>> {
     // Read env
     dotenvy::dotenv()?;
     let dec_key = std::env::var("KEY").expect("Variable KEY is not set");
@@ -103,6 +103,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("");
         }
     }
-
     Ok(())
+}
+
+fn main() {
+    // Main logic
+    if let Err(e) = request() {
+        eprintln!("Error: {}", e);
+    }
+
+    // Halt to show result
+    let mut stdout = io::stdout();
+    stdout
+        .write("Press Enter to exit the program...".as_bytes())
+        .unwrap();
+    stdout.flush().unwrap();
+    let mut stdin = io::stdin();
+    let mut tmp_buff = [0u8];
+    stdin.read(&mut tmp_buff).unwrap();
 }
