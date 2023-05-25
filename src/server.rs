@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 
-use clipboard_server::{END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT};
+use clipboard_server::{
+    enc::EncryptionStream, ENC_BLOCK_SIZE, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_FILE, TYPE_TEXT,
+};
 
 #[derive(Debug)]
 enum ClipboardContent {
@@ -13,6 +15,7 @@ impl ClipboardContent {
         &self,
         stream: &mut std::net::TcpStream,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Construct message
         let msg = match self {
             ClipboardContent::Text(text) => {
                 format!("{}{}{}{}", TYPE_TEXT, NEW_LINE, text.len(), END_OF_MSG)
@@ -31,7 +34,11 @@ impl ClipboardContent {
                 )
             }
         };
-        stream.write(msg.as_bytes())?;
+
+        // Encrypt message
+        let mut meta_stream = std::io::Cursor::new(msg);
+        let mut meta_stream = EncryptionStream::new(PASSWORD, &mut meta_stream, ENC_BLOCK_SIZE);
+        std::io::copy(&mut meta_stream, stream)?;
         Ok(())
     }
 

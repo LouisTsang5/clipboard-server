@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use clipboard_server::{END_OF_MSG, NEW_LINE, TYPE_TEXT};
+use clipboard_server::{enc::DecryptionStream, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_TEXT};
 
 #[derive(Debug)]
 enum Metadata {
@@ -38,6 +38,9 @@ fn get_filename(metadata_str: &str) -> Result<String, String> {
 }
 
 fn read_metadata(stream: &mut std::net::TcpStream) -> Result<Metadata, Box<dyn std::error::Error>> {
+    // Construct decryption stream
+    let mut stream = DecryptionStream::new(PASSWORD, stream)?;
+
     // Read until end of message to buffer
     let mut buf: Vec<u8> = Vec::new();
     loop {
