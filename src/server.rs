@@ -139,7 +139,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {
-        handle_conn(stream?, &enc_key, enc_block_size)?;
+        if let Err(e) = handle_conn(stream?, &enc_key, enc_block_size) {
+            eprintln!("Error: {}", e);
+        }
     }
     Ok(())
 }
