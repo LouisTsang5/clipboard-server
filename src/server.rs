@@ -1,8 +1,6 @@
 use std::io::Read;
 
-use clipboard_server::{
-    enc::EncryptionStream, ENC_BLOCK_SIZE, END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT,
-};
+use clipboard_server::{enc::EncryptionStream, END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT};
 
 #[derive(Debug)]
 enum ClipboardContent {
@@ -15,6 +13,7 @@ impl ClipboardContent {
         &self,
         stream: &mut std::net::TcpStream,
         enc_key: &str,
+        enc_block_size: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Construct message
         let msg = match self {
@@ -38,7 +37,7 @@ impl ClipboardContent {
 
         // Encrypt message
         let mut meta_stream = std::io::Cursor::new(msg);
-        let mut meta_stream = EncryptionStream::new(enc_key, &mut meta_stream, ENC_BLOCK_SIZE);
+        let mut meta_stream = EncryptionStream::new(enc_key, &mut meta_stream, enc_block_size);
         std::io::copy(&mut meta_stream, stream)?;
         Ok(())
     }
@@ -47,12 +46,13 @@ impl ClipboardContent {
         &self,
         stream: &mut std::net::TcpStream,
         enc_key: &str,
+        enc_block_size: usize,
     ) -> Result<usize, Box<dyn std::error::Error>> {
         let mut msg_stream: Box<dyn Read> = match self {
             ClipboardContent::Text(text) => Box::new(std::io::Cursor::new(text)),
             ClipboardContent::File(path) => Box::new(std::fs::File::open(path)?),
         };
-        let mut msg_stream = EncryptionStream::new(enc_key, &mut msg_stream, ENC_BLOCK_SIZE);
+        let mut msg_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
         let bytes_sent = std::io::copy(&mut msg_stream, stream)?;
         Ok(bytes_sent as usize)
     }
@@ -82,12 +82,13 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
 fn handle_conn(
     mut stream: std::net::TcpStream,
     enc_key: &str,
+    enc_block_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Read the current clipboard
     let clipboard_content = get_clipboard_content()?;
 
     // Send the metadata
-    clipboard_content.write_metadata(&mut stream, enc_key)?;
+    clipboard_content.write_metadata(&mut stream, enc_key, enc_block_size)?;
 
     // Read client response of if it wants to get the content or not
     let mut response: [u8; 1] = [0];
@@ -95,18 +96,17 @@ fn handle_conn(
 
     // Stream the content if true
     match &clipboard_content {
-        ClipboardContent::Text(s) => log(format!(
+        ClipboardContent::Text(s) => log(&format!(
             "Sending text to {} (Length: {})",
             &stream.peer_addr()?,
             s.len()
-        )
-        .as_str()),
+        )),
         ClipboardContent::File(p) => {
-            log(format!("Sending file {} to {}", p, &stream.peer_addr()?).as_str())
+            log(&format!("Sending file {} to {}", p, &stream.peer_addr()?))
         }
     }
     if response[0] != 0 {
-        clipboard_content.write_content(&mut stream, enc_key)?;
+        clipboard_content.write_content(&mut stream, enc_key, enc_block_size)?;
     }
 
     Ok(())
@@ -124,17 +124,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read env
     dotenvy::dotenv()?;
     let enc_key = std::env::var("KEY").expect("Variable KEY is not set");
+    let enc_block_size = std::env::var("ENC_BLOCK_SIZE").unwrap_or("1024".to_string());
+    let enc_block_size = enc_block_size
+        .parse::<usize>()
+        .expect(&format!("{} is not a valid block size", enc_block_size));
+    log(&format!("Encryption block size: {}", enc_block_size));
     let port = std::env::var("PORT")
         .expect("Variable PORT is not set")
         .parse::<u16>()
         .expect("PORT must be a non negative integer");
 
     // Start server
-    log(format!("Listening on port {}...", port).as_str());
+    log(&format!("Listening on port {}...", port));
     let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {
-        handle_conn(stream?, &enc_key)?;
+        handle_conn(stream?, &enc_key, enc_block_size)?;
     }
     Ok(())
 }
