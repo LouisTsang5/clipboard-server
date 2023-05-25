@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use clipboard_server::{
-    enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_TEXT,
+    enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, TYPE_TEXT,
 };
 
 #[derive(Debug)]
@@ -57,6 +57,7 @@ fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read env
     dotenvy::dotenv()?;
+    let dec_key = std::env::var("KEY").expect("Variable KEY is not set");
     let target = std::env::var("TARGET").expect("Variable TARGET is not set");
     let target = target
         .parse::<std::net::SocketAddr>()
@@ -67,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read metadata
     let metadata = {
-        let mut dec_stream = DecryptionStream::new(PASSWORD, &mut stream)?;
+        let mut dec_stream = DecryptionStream::new(&dec_key, &mut stream)?;
         read_metadata(&mut dec_stream)?
     };
 
@@ -75,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     stream.write("1".as_bytes())?;
 
     // Handle binary
-    let mut dec_stream = DecryptionStream::new(PASSWORD, &mut stream)?;
+    let mut dec_stream = DecryptionStream::new(&dec_key, &mut stream)?;
     match metadata {
         Metadata::Text { size } => {
             let mut stdout = std::io::stdout();

@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use clipboard_server::{
-    enc::EncryptionStream, ENC_BLOCK_SIZE, END_OF_MSG, NEW_LINE, PASSWORD, TYPE_FILE, TYPE_TEXT,
+    enc::EncryptionStream, ENC_BLOCK_SIZE, END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT,
 };
 
 #[derive(Debug)]
@@ -14,6 +14,7 @@ impl ClipboardContent {
     fn write_metadata(
         &self,
         stream: &mut std::net::TcpStream,
+        enc_key: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Construct message
         let msg = match self {
@@ -37,7 +38,7 @@ impl ClipboardContent {
 
         // Encrypt message
         let mut meta_stream = std::io::Cursor::new(msg);
-        let mut meta_stream = EncryptionStream::new(PASSWORD, &mut meta_stream, ENC_BLOCK_SIZE);
+        let mut meta_stream = EncryptionStream::new(enc_key, &mut meta_stream, ENC_BLOCK_SIZE);
         std::io::copy(&mut meta_stream, stream)?;
         Ok(())
     }
@@ -45,12 +46,13 @@ impl ClipboardContent {
     fn write_content(
         &self,
         stream: &mut std::net::TcpStream,
+        enc_key: &str,
     ) -> Result<usize, Box<dyn std::error::Error>> {
         let mut msg_stream: Box<dyn Read> = match self {
             ClipboardContent::Text(text) => Box::new(std::io::Cursor::new(text)),
             ClipboardContent::File(path) => Box::new(std::fs::File::open(path)?),
         };
-        let mut msg_stream = EncryptionStream::new(PASSWORD, &mut msg_stream, ENC_BLOCK_SIZE);
+        let mut msg_stream = EncryptionStream::new(enc_key, &mut msg_stream, ENC_BLOCK_SIZE);
         let bytes_sent = std::io::copy(&mut msg_stream, stream)?;
         Ok(bytes_sent as usize)
     }
@@ -77,12 +79,15 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
     }
 }
 
-fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_conn(
+    mut stream: std::net::TcpStream,
+    enc_key: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Read the current clipboard
     let clipboard_content = get_clipboard_content()?;
 
     // Send the metadata
-    clipboard_content.write_metadata(&mut stream)?;
+    clipboard_content.write_metadata(&mut stream, enc_key)?;
 
     // Read client response of if it wants to get the content or not
     let mut response: [u8; 1] = [0];
@@ -101,7 +106,7 @@ fn handle_conn(mut stream: std::net::TcpStream) -> Result<(), Box<dyn std::error
         }
     }
     if response[0] != 0 {
-        clipboard_content.write_content(&mut stream)?;
+        clipboard_content.write_content(&mut stream, enc_key)?;
     }
 
     Ok(())
@@ -118,6 +123,7 @@ fn log(msg: &str) {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read env
     dotenvy::dotenv()?;
+    let enc_key = std::env::var("KEY").expect("Variable KEY is not set");
     let port = std::env::var("PORT")
         .expect("Variable PORT is not set")
         .parse::<u16>()
@@ -128,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {
-        handle_conn(stream?)?;
+        handle_conn(stream?, &enc_key)?;
     }
     Ok(())
 }
