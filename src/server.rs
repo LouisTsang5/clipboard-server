@@ -13,31 +13,26 @@ impl ClipboardContent {
         &self,
         stream: &mut std::net::TcpStream,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        match self {
+        let msg = match self {
             ClipboardContent::Text(text) => {
-                stream.write(
-                    format!("{}{}{}{}", TYPE_TEXT, NEW_LINE, text.len(), END_OF_MSG).as_bytes(),
-                )?;
-                Ok(())
+                format!("{}{}{}{}", TYPE_TEXT, NEW_LINE, text.len(), END_OF_MSG)
             }
             ClipboardContent::File(path) => {
                 let path = std::path::Path::new(path);
                 let metadata = std::fs::metadata(path)?;
-                stream.write(
-                    format!(
-                        "{}{}{}{}{}{}", // 1 file_size file_name
-                        TYPE_FILE,
-                        NEW_LINE,
-                        metadata.len(),
-                        NEW_LINE,
-                        path.file_name().unwrap().to_str().unwrap(),
-                        END_OF_MSG
-                    )
-                    .as_bytes(),
-                )?;
-                Ok(())
+                format!(
+                    "{}{}{}{}{}{}", // 1 file_size file_name
+                    TYPE_FILE,
+                    NEW_LINE,
+                    metadata.len(),
+                    NEW_LINE,
+                    path.file_name().unwrap().to_str().unwrap(),
+                    END_OF_MSG
+                )
             }
-        }
+        };
+        stream.write(msg.as_bytes())?;
+        Ok(())
     }
 
     fn write_content(
