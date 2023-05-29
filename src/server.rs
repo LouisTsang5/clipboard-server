@@ -1,4 +1,7 @@
-use std::io::Read;
+use std::{
+    error::Error,
+    io::{self, Cursor, Read},
+};
 
 use clipboard_server::{enc::EncryptionStream, Metadata, END_OF_MSG};
 
@@ -9,47 +12,25 @@ enum ClipboardContent {
 }
 
 impl ClipboardContent {
-    fn write_metadata(
-        &self,
-        stream: &mut std::net::TcpStream,
-        enc_key: &str,
-        enc_block_size: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Construct metadata
-        let metadata = match self {
-            ClipboardContent::Text(text) => Metadata::Text { size: text.len() },
+    fn to_metadata(&self) -> Result<Metadata, Box<dyn Error>> {
+        match self {
+            ClipboardContent::Text(text) => Ok(Metadata::Text { size: text.len() }),
             ClipboardContent::File(path) => {
                 let path = std::path::Path::new(path);
                 let f_metadata = std::fs::metadata(path)?;
-                Metadata::File {
+                Ok(Metadata::File {
                     size: f_metadata.len() as usize,
                     name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                }
+                })
             }
-        };
-        let mut msg = metadata.to_bytes();
-        msg.push(END_OF_MSG);
-
-        // Encrypt message
-        let mut meta_stream = std::io::Cursor::new(msg);
-        let mut meta_stream = EncryptionStream::new(enc_key, &mut meta_stream, enc_block_size);
-        std::io::copy(&mut meta_stream, stream)?;
-        Ok(())
+        }
     }
 
-    fn write_content(
-        &self,
-        stream: &mut std::net::TcpStream,
-        enc_key: &str,
-        enc_block_size: usize,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
-        let mut msg_stream: Box<dyn Read> = match self {
-            ClipboardContent::Text(text) => Box::new(std::io::Cursor::new(text)),
-            ClipboardContent::File(path) => Box::new(std::fs::File::open(path)?),
-        };
-        let mut msg_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
-        let bytes_sent = std::io::copy(&mut msg_stream, stream)?;
-        Ok(bytes_sent as usize)
+    fn to_stream(&self) -> Result<Box<dyn Read>, Box<dyn Error>> {
+        match self {
+            ClipboardContent::Text(text) => Ok(Box::new(std::io::Cursor::new(text.to_owned()))),
+            ClipboardContent::File(path) => Ok(Box::new(std::fs::File::open(path)?)),
+        }
     }
 }
 
@@ -81,14 +62,17 @@ fn handle_conn(
     // Read the current clipboard
     let clipboard_content = get_clipboard_content()?;
 
-    // Send the metadata
-    clipboard_content.write_metadata(&mut stream, enc_key, enc_block_size)?;
+    // Construct the message stream
+    let meta_stream = Cursor::new(clipboard_content.to_metadata()?.to_bytes());
+    let content_stream = clipboard_content.to_stream()?;
+    let mut msg_stream = meta_stream
+        .chain(Cursor::new([END_OF_MSG])) // EOF between metadata and the actual content
+        .chain(content_stream);
 
-    // Read client response of if it wants to get the content or not
-    let mut response: [u8; 1] = [0];
-    stream.read_exact(&mut response)?;
+    // Construct the encryption stream
+    let mut enc_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
 
-    // Stream the content if true
+    // Stream the message
     match &clipboard_content {
         ClipboardContent::Text(s) => log(&format!(
             "Sending text to {} (Length: {})",
@@ -99,10 +83,7 @@ fn handle_conn(
             log(&format!("Sending file {} to {}", p, &stream.peer_addr()?))
         }
     }
-    if response[0] != 0 {
-        clipboard_content.write_content(&mut stream, enc_key, enc_block_size)?;
-    }
-
+    io::copy(&mut enc_stream, &mut stream)?;
     Ok(())
 }
 
