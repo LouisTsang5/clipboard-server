@@ -1,6 +1,7 @@
 use std::{error::Error, io::Write};
 
 pub const END_OF_MSG: u8 = 0;
+pub const END_OF_MSG_SIZE: usize = std::mem::size_of::<u8>();
 
 pub mod enc;
 

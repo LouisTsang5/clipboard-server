@@ -7,14 +7,16 @@ use clipboard_server::{
 
 fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::Error>> {
     // Read until end of message to buffer
-    let mut buf: Vec<u8> = Vec::with_capacity(INIT_METADATA_BUFF_SIZE + 1);
+    let mut buf: Vec<u8> = Vec::with_capacity(INIT_METADATA_BUFF_SIZE + END_OF_MSG_SIZE);
     let mut total_bytes_read = 0;
     loop {
         let mut chunk = [0; 128];
         let bytes_read = stream.read(&mut chunk)?;
         buf.extend(&chunk[..bytes_read]);
         total_bytes_read += bytes_read;
-        if total_bytes_read >= COMMON_HEADER_SIZE + 1 && buf[buf.len() - 1] == END_OF_MSG {
+        if total_bytes_read >= COMMON_HEADER_SIZE + END_OF_MSG_SIZE
+            && buf[buf.len() - 1] == END_OF_MSG
+        {
             break;
         }
     }
