@@ -38,19 +38,15 @@ fn request() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read content
     let metadata = read_metadata(&mut stream)?;
+    let mut stream = stream.take(metadata.size() as u64);
     match metadata {
-        Metadata::Text { size } => {
-            let mut stdout = std::io::stdout();
-            std::io::copy(&mut stream.take(size as u64), &mut stdout)?;
-            println!("\nMessage len: {}", size);
+        Metadata::Text { size: _ } => {
+            std::io::copy(&mut stream, &mut std::io::stdout())?;
         }
         Metadata::File { name, size } => {
-            println!("Getting {}...", name);
-            let cur_dir = std::env::current_dir()?;
-            let file_path = cur_dir.join(&name);
-            let mut file = std::fs::File::create(file_path)?;
-
             // Get the file while printing the progression
+            println!("Getting {}...", name);
+            let mut file = std::fs::File::create(std::env::current_dir()?.join(&name))?;
             let mut buff = [0; 1024];
             let mut total_bytes_read = 0;
             while total_bytes_read < size {
@@ -62,9 +58,9 @@ fn request() -> Result<(), Box<dyn std::error::Error>> {
                 total_bytes_read += bytes_read;
                 print_progress(total_bytes_read as f32 / size as f32, 50);
             }
-            println!("");
         }
     }
+    println!("");
     Ok(())
 }
 

@@ -45,6 +45,13 @@ impl Metadata {
         }
         bytes
     }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Self::File { size, name: _ } => *size,
+            Self::Text { size } => *size,
+        }
+    }
 }
 
 impl TryFrom<&[u8]> for Metadata {
