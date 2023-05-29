@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use clipboard_server::{enc::EncryptionStream, END_OF_MSG, NEW_LINE, TYPE_FILE, TYPE_TEXT};
+use clipboard_server::{enc::EncryptionStream, Metadata, END_OF_MSG};
 
 #[derive(Debug)]
 enum ClipboardContent {
@@ -15,25 +15,20 @@ impl ClipboardContent {
         enc_key: &str,
         enc_block_size: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Construct message
-        let msg = match self {
-            ClipboardContent::Text(text) => {
-                format!("{}{}{}{}", TYPE_TEXT, NEW_LINE, text.len(), END_OF_MSG)
-            }
+        // Construct metadata
+        let metadata = match self {
+            ClipboardContent::Text(text) => Metadata::Text { size: text.len() },
             ClipboardContent::File(path) => {
                 let path = std::path::Path::new(path);
-                let metadata = std::fs::metadata(path)?;
-                format!(
-                    "{}{}{}{}{}{}", // 1 file_size file_name
-                    TYPE_FILE,
-                    NEW_LINE,
-                    metadata.len(),
-                    NEW_LINE,
-                    path.file_name().unwrap().to_str().unwrap(),
-                    END_OF_MSG
-                )
+                let f_metadata = std::fs::metadata(path)?;
+                Metadata::File {
+                    size: f_metadata.len() as usize,
+                    name: path.file_name().unwrap().to_str().unwrap().to_string(),
+                }
             }
         };
+        let mut msg = metadata.to_bytes();
+        msg.push(END_OF_MSG);
 
         // Encrypt message
         let mut meta_stream = std::io::Cursor::new(msg);

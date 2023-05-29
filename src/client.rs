@@ -1,56 +1,24 @@
-use std::{
-    error::Error,
-    io::{self, Read, Write},
-};
+use std::io::{self, Read, Write};
 
 use clipboard_server::{
-    enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, TYPE_TEXT,
+    enc::DecryptionStream, print_progress, Metadata, COMMON_HEADER_SIZE, END_OF_MSG,
+    INIT_METADATA_BUFF_SIZE,
 };
-
-#[derive(Debug)]
-enum Metadata {
-    Text { size: usize },
-    File { name: String, size: usize },
-}
-
-impl TryFrom<&[u8]> for Metadata {
-    type Error = Box<dyn Error>;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let metadata = String::from_utf8(value.to_vec())?;
-        let newline_indices = find_indices(&metadata, NEW_LINE);
-
-        let is_text = &metadata[..TYPE_TEXT.len()] == TYPE_TEXT;
-        if (is_text && newline_indices.len() < 2) || (!is_text && newline_indices.len() < 3) {
-            return Err("Metadata malformed".to_string().into());
-        }
-        let size =
-            metadata[newline_indices[0] + NEW_LINE.len()..newline_indices[1]].parse::<usize>()?; // length is between first and second line break
-
-        match is_text {
-            true => Ok(Metadata::Text { size }),
-            false => {
-                Ok(Metadata::File {
-                    name: metadata[newline_indices[1] + NEW_LINE.len()..newline_indices[2]]
-                        .to_string(), // filename is between second and third line break
-                    size,
-                })
-            }
-        }
-    }
-}
 
 fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::Error>> {
     // Read until end of message to buffer
-    let mut buf: Vec<u8> = Vec::new();
+    let mut buf: Vec<u8> = Vec::with_capacity(INIT_METADATA_BUFF_SIZE + 1);
+    let mut total_bytes_read = 0;
     loop {
         let mut chunk = [0; 128];
         let bytes_read = stream.read(&mut chunk)?;
         buf.extend(&chunk[..bytes_read]);
-        if buf.ends_with(END_OF_MSG.as_bytes()) {
+        total_bytes_read += bytes_read;
+        if total_bytes_read >= COMMON_HEADER_SIZE && buf[buf.len() - 1] == END_OF_MSG {
             break;
         }
     }
+    let buf = &buf[..buf.len() - 1]; // Remove last end of message byte
 
     // Deserialize the buffer to metadata
     Metadata::try_from(&buf as &[u8])
