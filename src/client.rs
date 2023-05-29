@@ -1,4 +1,7 @@
-use std::io::{self, Read, Write};
+use std::{
+    error::Error,
+    io::{self, Read, Write},
+};
 
 use clipboard_server::{
     enc::DecryptionStream, find_indices, print_progress, END_OF_MSG, NEW_LINE, TYPE_TEXT,
@@ -10,22 +13,31 @@ enum Metadata {
     File { name: String, size: usize },
 }
 
-fn get_size(metadata_str: &str) -> Result<usize, Box<dyn std::error::Error>> {
-    let newline_indices = find_indices(&metadata_str, NEW_LINE);
-    if newline_indices.len() < 2 {
-        return Err("Metadata malformed".to_string().into());
-    }
-    let length = &metadata_str[newline_indices[0] + NEW_LINE.len()..newline_indices[1]]; // length is between first and second line break
-    Ok(length.parse::<usize>()?)
-}
+impl TryFrom<&[u8]> for Metadata {
+    type Error = Box<dyn Error>;
 
-fn get_filename(metadata_str: &str) -> Result<String, String> {
-    let newline_indices = find_indices(&metadata_str, NEW_LINE);
-    if newline_indices.len() < 3 {
-        return Err("Metadata malformed".to_string());
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let metadata = String::from_utf8(value.to_vec())?;
+        let newline_indices = find_indices(&metadata, NEW_LINE);
+
+        let is_text = &metadata[..TYPE_TEXT.len()] == TYPE_TEXT;
+        if (is_text && newline_indices.len() < 2) || (!is_text && newline_indices.len() < 3) {
+            return Err("Metadata malformed".to_string().into());
+        }
+        let size =
+            metadata[newline_indices[0] + NEW_LINE.len()..newline_indices[1]].parse::<usize>()?; // length is between first and second line break
+
+        match is_text {
+            true => Ok(Metadata::Text { size }),
+            false => {
+                Ok(Metadata::File {
+                    name: metadata[newline_indices[1] + NEW_LINE.len()..newline_indices[2]]
+                        .to_string(), // filename is between second and third line break
+                    size,
+                })
+            }
+        }
     }
-    let filename = &metadata_str[newline_indices[1] + NEW_LINE.len()..newline_indices[2]]; // filename is between second and third line break
-    Ok(filename.to_string())
 }
 
 fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::Error>> {
@@ -41,17 +53,7 @@ fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::
     }
 
     // Deserialize the buffer to metadata
-    let metadata = String::from_utf8(buf)?;
-    if &metadata[..TYPE_TEXT.len()] == TYPE_TEXT {
-        Ok(Metadata::Text {
-            size: get_size(&metadata)?,
-        })
-    } else {
-        Ok(Metadata::File {
-            name: get_filename(&metadata)?,
-            size: get_size(&metadata)?,
-        })
-    }
+    Metadata::try_from(&buf as &[u8])
 }
 
 fn request() -> Result<(), Box<dyn std::error::Error>> {
