@@ -10,17 +10,14 @@ fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::
     let mut buf: Vec<u8> = Vec::with_capacity(INIT_METADATA_BUFF_SIZE + END_OF_MSG_SIZE);
     let mut total_bytes_read = 0;
     loop {
-        let mut chunk = [0; 1];
-        let bytes_read = stream.read(&mut chunk)?;
-        buf.extend(&chunk[..bytes_read]);
-        total_bytes_read += bytes_read;
-        if total_bytes_read >= COMMON_HEADER_SIZE + END_OF_MSG_SIZE
-            && buf[buf.len() - 1] == END_OF_MSG
-        {
+        let mut byte = [0; 1];
+        stream.read_exact(&mut byte)?;
+        total_bytes_read += 1;
+        if total_bytes_read > COMMON_HEADER_SIZE && byte[0] == END_OF_MSG {
             break;
         }
+        buf.push(byte[0]);
     }
-    let buf = &buf[..buf.len() - 1]; // Remove last end of message byte
 
     // Deserialize the buffer to metadata
     Metadata::try_from(&buf as &[u8])
