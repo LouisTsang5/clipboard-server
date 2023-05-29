@@ -59,8 +59,7 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
         .arg("pbpaste -Prefer 'public.file-url'")
         .output()?
         .stdout;
-    let clipboard =
-        String::from_utf8(output).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    let clipboard = String::from_utf8(output)?;
 
     const FILE_URL_PREFIX: &str = "file://";
 
@@ -70,7 +69,7 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
         let path = urlencoding::decode(&clipboard[7..]).unwrap();
         Ok(ClipboardContent::File(String::from(path)))
     } else {
-        Ok(ClipboardContent::Text(clipboard.to_string()))
+        Ok(ClipboardContent::Text(clipboard))
     }
 }
 
