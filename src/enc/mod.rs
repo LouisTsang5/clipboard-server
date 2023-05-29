@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use aes_gcm::{
     aead::{generic_array::GenericArray, rand_core::RngCore, Aead, OsRng},
     Aes256Gcm, KeyInit,
@@ -99,16 +101,16 @@ fn derive_key(password: &str, salt: Option<Salt>) -> (Key, Salt) {
     (key, salt)
 }
 
-pub struct EncryptionStream<'a, R: std::io::Read> {
+pub struct EncryptionStream<'a> {
     cipher: Aes256Gcm,
     nonce: Nonce,
     block_size: usize,
-    stream: &'a mut R,
+    stream: &'a mut dyn Read,
     inter_buff: Vec<u8>,
 }
 
-impl<'a, R: std::io::Read> EncryptionStream<'a, R> {
-    pub fn new(password: &str, stream: &'a mut R, block_size: usize) -> Self {
+impl<'a> EncryptionStream<'a> {
+    pub fn new(password: &str, stream: &'a mut dyn Read, block_size: usize) -> Self {
         // Derive key and cipher
         let (key, salt) = derive_key(password, None);
         let cipher = Aes256Gcm::new(GenericArray::from_slice(&key));
@@ -134,7 +136,7 @@ impl<'a, R: std::io::Read> EncryptionStream<'a, R> {
     }
 }
 
-impl<'a, R: std::io::Read> std::io::Read for EncryptionStream<'a, R> {
+impl<'a> std::io::Read for EncryptionStream<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // If intermediate buffer is empty, encrypt and push to buffer
         if self.inter_buff.len() <= 0 {
@@ -182,16 +184,19 @@ impl<'a, R: std::io::Read> std::io::Read for EncryptionStream<'a, R> {
     }
 }
 
-pub struct DecryptionStream<'a, R: std::io::Read> {
+pub struct DecryptionStream<'a> {
     cipher: Aes256Gcm,
     nonce: Nonce,
     block_size: usize,
-    stream: &'a mut R,
+    stream: &'a mut dyn Read,
     inter_buff: Vec<u8>,
 }
 
-impl<'a, R: std::io::Read> DecryptionStream<'a, R> {
-    pub fn new(password: &str, stream: &'a mut R) -> Result<Self, Box<dyn std::error::Error>> {
+impl<'a> DecryptionStream<'a> {
+    pub fn new(
+        password: &str,
+        stream: &'a mut dyn Read,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         // Read salt
         let mut salt: Salt = [0; SALT_LEN];
         if let Err(e) = stream.read_exact(&mut salt) {
@@ -234,7 +239,7 @@ impl<'a, R: std::io::Read> DecryptionStream<'a, R> {
     }
 }
 
-impl<'a, R: std::io::Read> std::io::Read for DecryptionStream<'a, R> {
+impl<'a> std::io::Read for DecryptionStream<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Decrypt a block and store it to inter buff
         if self.inter_buff.len() <= 0 {
