@@ -14,7 +14,7 @@ fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::
         let bytes_read = stream.read(&mut chunk)?;
         buf.extend(&chunk[..bytes_read]);
         total_bytes_read += bytes_read;
-        if total_bytes_read >= COMMON_HEADER_SIZE && buf[buf.len() - 1] == END_OF_MSG {
+        if total_bytes_read >= COMMON_HEADER_SIZE + 1 && buf[buf.len() - 1] == END_OF_MSG {
             break;
         }
     }
