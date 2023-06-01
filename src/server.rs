@@ -4,6 +4,7 @@ use std::{
 };
 
 use clipboard_server::{enc::EncryptionStream, Metadata, END_OF_MSG};
+use flate2::{read::ZlibEncoder, Compression};
 
 #[derive(Debug)]
 enum ClipboardContent {
@@ -69,8 +70,10 @@ fn handle_conn(
         .chain(Cursor::new([END_OF_MSG])) // EOF between metadata and the actual content
         .chain(content_stream);
 
-    // Construct the encryption stream
-    let mut enc_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
+    // Construct the stream
+    // Data -> Encryption -> Compression
+    let enc_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
+    let mut cmp_stream = ZlibEncoder::new(enc_stream, Compression::default());
 
     // Stream the message
     match &clipboard_content {
@@ -83,7 +86,8 @@ fn handle_conn(
             log(&format!("Sending file {} to {}", p, &stream.peer_addr()?))
         }
     }
-    io::copy(&mut enc_stream, &mut stream)?;
+    let bytes_written = io::copy(&mut cmp_stream, &mut stream)?;
+    log(&format!("Sent {} bytes.", bytes_written));
     Ok(())
 }
 

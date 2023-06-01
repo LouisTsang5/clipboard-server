@@ -4,6 +4,7 @@ use clipboard_server::{
     enc::DecryptionStream, print_progress, Metadata, COMMON_HEADER_SIZE, END_OF_MSG,
     END_OF_MSG_SIZE, INIT_METADATA_BUFF_SIZE,
 };
+use flate2::read::ZlibDecoder;
 
 fn read_metadata(stream: &mut dyn Read) -> Result<Metadata, Box<dyn std::error::Error>> {
     // Read until end of message to buffer
@@ -32,8 +33,10 @@ fn request() -> Result<(), Box<dyn std::error::Error>> {
         .parse::<std::net::SocketAddr>()
         .expect("Illegal TARGET address");
 
-    // Open connection
-    let mut stream = std::net::TcpStream::connect(target)?;
+    // Construct the stream
+    // Raw bytes -> Decompression -> Decryption
+    let stream = std::net::TcpStream::connect(target)?;
+    let mut stream = ZlibDecoder::new(stream);
     let mut stream = DecryptionStream::new(&dec_key, &mut stream)?;
 
     // Read content
