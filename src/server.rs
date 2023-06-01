@@ -17,7 +17,7 @@ enum ClipboardContent {
 }
 
 impl ClipboardContent {
-    fn to_metadata(&self) -> Result<Metadata, Box<dyn Error>> {
+    fn metadata(&self) -> Result<Metadata, io::Error> {
         match self {
             ClipboardContent::Text(text) => Ok(Metadata::Text { size: text.len() }),
             ClipboardContent::File(path) => {
@@ -31,7 +31,7 @@ impl ClipboardContent {
         }
     }
 
-    fn to_stream(&self) -> Result<Box<dyn Read>, Box<dyn Error>> {
+    fn content_stream(&self) -> Result<Box<dyn Read>, io::Error> {
         match self {
             ClipboardContent::Text(text) => Ok(Box::new(Cursor::new(text.to_owned()))),
             ClipboardContent::File(path) => Ok(Box::new(File::open(path)?)),
@@ -68,16 +68,16 @@ fn send_clipboard_content(
     // Read the current clipboard
     let clipboard_content = get_clipboard_content()?;
 
-    // Construct the message stream
-    let meta_stream = Cursor::new(clipboard_content.to_metadata()?.to_bytes());
-    let content_stream = clipboard_content.to_stream()?;
-    let msg_stream = meta_stream
+    // Obtain metadata and content streams
+    let meta_stream = Cursor::new(clipboard_content.metadata()?.to_bytes());
+    let content_stream = clipboard_content.content_stream()?;
+
+    // Construct the output stream
+    // Data -> Encryption -> Compression
+    let stream = meta_stream
         .chain(Cursor::new([END_OF_MSG])) // EOF between metadata and the actual content
         .chain(content_stream);
-
-    // Construct the stream
-    // Data -> Encryption -> Compression
-    let stream = EncryptionStream::new(enc_key, msg_stream, enc_block_size);
+    let stream = EncryptionStream::new(enc_key, stream, enc_block_size);
     let mut stream = ZlibEncoder::new(stream, Compression::default());
 
     // Stream the message
