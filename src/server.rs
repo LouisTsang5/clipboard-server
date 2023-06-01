@@ -1,6 +1,10 @@
 use std::{
+    env,
     error::Error,
+    fs::{self, File},
     io::{self, Cursor, Read},
+    net::{SocketAddr, TcpListener, TcpStream},
+    path::Path,
 };
 
 use clipboard_server::{enc::EncryptionStream, Metadata, END_OF_MSG};
@@ -17,8 +21,8 @@ impl ClipboardContent {
         match self {
             ClipboardContent::Text(text) => Ok(Metadata::Text { size: text.len() }),
             ClipboardContent::File(path) => {
-                let path = std::path::Path::new(path);
-                let f_metadata = std::fs::metadata(path)?;
+                let path = Path::new(path);
+                let f_metadata = fs::metadata(path)?;
                 Ok(Metadata::File {
                     size: f_metadata.len() as usize,
                     name: path.file_name().unwrap().to_str().unwrap().to_string(),
@@ -29,13 +33,13 @@ impl ClipboardContent {
 
     fn to_stream(&self) -> Result<Box<dyn Read>, Box<dyn Error>> {
         match self {
-            ClipboardContent::Text(text) => Ok(Box::new(std::io::Cursor::new(text.to_owned()))),
-            ClipboardContent::File(path) => Ok(Box::new(std::fs::File::open(path)?)),
+            ClipboardContent::Text(text) => Ok(Box::new(Cursor::new(text.to_owned()))),
+            ClipboardContent::File(path) => Ok(Box::new(File::open(path)?)),
         }
     }
 }
 
-fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error>> {
+fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn Error>> {
     let output = std::process::Command::new("sh")
         .arg("-c")
         .arg("pbpaste -Prefer 'public.file-url'")
@@ -55,11 +59,12 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn std::error::Error
     }
 }
 
-fn handle_conn(
-    mut stream: std::net::TcpStream,
+fn send_clipboard_content(
+    mut client_stream: TcpStream,
+    client_addr: SocketAddr,
     enc_key: &str,
     enc_block_size: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn Error>> {
     // Read the current clipboard
     let clipboard_content = get_clipboard_content()?;
 
@@ -72,22 +77,16 @@ fn handle_conn(
 
     // Construct the stream
     // Data -> Encryption -> Compression
-    let enc_stream = EncryptionStream::new(enc_key, msg_stream, enc_block_size);
-    let mut cmp_stream = ZlibEncoder::new(enc_stream, Compression::default());
+    let stream = EncryptionStream::new(enc_key, msg_stream, enc_block_size);
+    let mut stream = ZlibEncoder::new(stream, Compression::default());
 
     // Stream the message
-    match &clipboard_content {
-        ClipboardContent::Text(s) => log(&format!(
-            "Sending text to {} (Length: {})",
-            &stream.peer_addr()?,
-            s.len()
-        )),
-        ClipboardContent::File(p) => {
-            log(&format!("Sending file {} to {}", p, &stream.peer_addr()?))
-        }
-    }
-    let bytes_written = io::copy(&mut cmp_stream, &mut stream)?;
-    log(&format!("Sent {} bytes.", bytes_written));
+    log(&match &clipboard_content {
+        ClipboardContent::Text(_) => format!("Sending text to {}", &client_addr),
+        ClipboardContent::File(p) => format!("Sending file {} to {}", p, &client_addr),
+    });
+    let bytes_written = io::copy(&mut stream, &mut client_stream)?;
+    log(&format!("Sent {} bytes to {}", bytes_written, &client_addr));
     Ok(())
 }
 
@@ -99,26 +98,28 @@ fn log(msg: &str) {
     );
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     // Read env
     dotenvy::dotenv()?;
-    let enc_key = std::env::var("KEY").expect("Variable KEY is not set");
-    let enc_block_size = std::env::var("ENC_BLOCK_SIZE").unwrap_or("1024".to_string());
+    let enc_key = env::var("KEY").expect("Variable KEY is not set");
+    let enc_block_size = env::var("ENC_BLOCK_SIZE").unwrap_or("1024".to_string());
     let enc_block_size = enc_block_size
         .parse::<usize>()
         .expect(&format!("{} is not a valid block size", enc_block_size));
     log(&format!("Encryption block size: {}", enc_block_size));
-    let port = std::env::var("PORT")
+    let port = env::var("PORT")
         .expect("Variable PORT is not set")
         .parse::<u16>()
         .expect("PORT must be a non negative integer");
 
     // Start server
     log(&format!("Listening on port {}...", port));
-    let listener = std::net::TcpListener::bind(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
+    let listener = TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {
-        if let Err(e) = handle_conn(stream?, &enc_key, enc_block_size) {
+        let stream = stream?;
+        let sock_addr = stream.peer_addr()?;
+        if let Err(e) = send_clipboard_content(stream, sock_addr, &enc_key, enc_block_size) {
             eprintln!("Error: {}", e);
         }
     }
