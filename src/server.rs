@@ -66,13 +66,13 @@ fn handle_conn(
     // Construct the message stream
     let meta_stream = Cursor::new(clipboard_content.to_metadata()?.to_bytes());
     let content_stream = clipboard_content.to_stream()?;
-    let mut msg_stream = meta_stream
+    let msg_stream = meta_stream
         .chain(Cursor::new([END_OF_MSG])) // EOF between metadata and the actual content
         .chain(content_stream);
 
     // Construct the stream
     // Data -> Encryption -> Compression
-    let enc_stream = EncryptionStream::new(enc_key, &mut msg_stream, enc_block_size);
+    let enc_stream = EncryptionStream::new(enc_key, msg_stream, enc_block_size);
     let mut cmp_stream = ZlibEncoder::new(enc_stream, Compression::default());
 
     // Stream the message

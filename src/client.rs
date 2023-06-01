@@ -36,8 +36,8 @@ fn request() -> Result<(), Box<dyn std::error::Error>> {
     // Construct the stream
     // Raw bytes -> Decompression -> Decryption
     let stream = std::net::TcpStream::connect(target)?;
-    let mut stream = ZlibDecoder::new(stream);
-    let mut stream = DecryptionStream::new(&dec_key, &mut stream)?;
+    let stream = ZlibDecoder::new(stream);
+    let mut stream = DecryptionStream::new(&dec_key, stream)?;
 
     // Read content
     let metadata = read_metadata(&mut stream)?;
