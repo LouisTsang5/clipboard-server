@@ -1,10 +1,24 @@
-use std::{error::Error, io::Write};
+use aes_gcm::aead::rand_core::RngCore;
+use std::{error::Error, io::Write, mem::size_of};
 
 pub const END_OF_MSG: u8 = 0;
 pub const END_OF_MSG_SIZE: usize = std::mem::size_of::<u8>();
 
 pub mod enc;
 pub mod tar;
+
+pub fn rand_alphanumeric(len: usize) -> String {
+    const CHARS: [(u8, u8); 3] = [(b'a', b'z'), (b'A', b'Z'), (b'0', b'9')];
+    let chars: Vec<u8> = CHARS.iter().flat_map(|(s, e)| *s..=*e).collect();
+    let mut s = String::with_capacity(len);
+    for _ in 0..len {
+        let mut rand_index = [0u8; size_of::<usize>()];
+        aes_gcm::aead::OsRng.fill_bytes(&mut rand_index);
+        let rand_index = usize::from_le_bytes(rand_index) % chars.len();
+        s.push(chars[rand_index] as char);
+    }
+    s
+}
 
 pub fn log(msg: &str) {
     println!(
