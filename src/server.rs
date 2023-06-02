@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use clipboard_server::{enc::EncryptionStream, Metadata, END_OF_MSG};
+use clipboard_server::{enc::EncryptionStream, log, Metadata, END_OF_MSG};
 use flate2::{read::ZlibEncoder, Compression};
 
 #[derive(Debug)]
@@ -88,14 +88,6 @@ fn send_clipboard_content(
     let bytes_written = io::copy(&mut stream, &mut client_stream)?;
     log(&format!("Sent {} bytes to {}", bytes_written, &client_addr));
     Ok(())
-}
-
-fn log(msg: &str) {
-    println!(
-        "[{}] {}",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-        msg
-    );
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -5,6 +5,14 @@ pub const END_OF_MSG_SIZE: usize = std::mem::size_of::<u8>();
 
 pub mod enc;
 
+pub fn log(msg: &str) {
+    println!(
+        "[{}] {}",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        msg
+    );
+}
+
 pub fn print_progress(percentage: f32, bar_width: usize) {
     let num_bars = (percentage * bar_width as f32) as usize;
     let bar_str = format!(
