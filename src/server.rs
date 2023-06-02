@@ -7,13 +7,19 @@ use std::{
     path::Path,
 };
 
-use clipboard_server::{enc::EncryptionStream, log, Metadata, END_OF_MSG};
+use clipboard_server::{
+    enc::EncryptionStream, log, rand_alphanumeric, tar::tar_dir, Metadata, END_OF_MSG,
+};
 use flate2::{read::ZlibEncoder, Compression};
 
 #[derive(Debug)]
 enum ClipboardContent {
     Text(String),
     File(String),
+    Dir {
+        path: String,
+        archive_file: Option<String>,
+    },
 }
 
 impl ClipboardContent {
@@ -28,6 +34,22 @@ impl ClipboardContent {
                     name: path.file_name().unwrap().to_str().unwrap().to_string(),
                 })
             }
+            ClipboardContent::Dir { path, archive_file } => match archive_file {
+                None => Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Cannot find archive file",
+                )),
+                Some(f) => {
+                    let mut name = Path::new(path)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string();
+                    name.push_str(".tar");
+                    let size = fs::metadata(Path::new(f))?.len() as usize;
+                    Ok(Metadata::File { size, name })
+                }
+            },
         }
     }
 
@@ -35,6 +57,16 @@ impl ClipboardContent {
         match self {
             ClipboardContent::Text(text) => Ok(Box::new(Cursor::new(text.to_owned()))),
             ClipboardContent::File(path) => Ok(Box::new(File::open(path)?)),
+            ClipboardContent::Dir {
+                path: _,
+                archive_file,
+            } => match archive_file {
+                None => Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Cannot find archive file",
+                )),
+                Some(f) => Ok(Box::new(File::open(f)?)),
+            },
         }
     }
 }
@@ -52,12 +84,31 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn Error>> {
     if clipboard.len() >= FILE_URL_PREFIX.len()
         && &clipboard[0..FILE_URL_PREFIX.len()] == FILE_URL_PREFIX
     {
-        let path = urlencoding::decode(&clipboard[FILE_URL_PREFIX.len()..]).unwrap();
-        Ok(ClipboardContent::File(String::from(path)))
+        let path = urlencoding::decode(&clipboard[FILE_URL_PREFIX.len()..])?.to_string();
+        let metadata = fs::metadata(&path)?;
+        match metadata.is_dir() {
+            true => {
+                log(&format!("Clipboard points to the directory {}", path));
+                Ok(ClipboardContent::Dir {
+                    path,
+                    archive_file: None,
+                })
+            }
+            false => {
+                log(&format!("Clipboard points to the file {}", path));
+                Ok(ClipboardContent::File(path))
+            }
+        }
     } else {
+        log(&format!(
+            "Clipboard contains text with length {}",
+            clipboard.len()
+        ));
         Ok(ClipboardContent::Text(clipboard))
     }
 }
+
+const RAND_FILE_NAME_LEN: usize = 32;
 
 fn send_clipboard_content(
     mut client_stream: TcpStream,
@@ -66,7 +117,14 @@ fn send_clipboard_content(
     enc_block_size: usize,
 ) -> Result<(), Box<dyn Error>> {
     // Read the current clipboard
-    let clipboard_content = get_clipboard_content()?;
+    let mut clipboard_content = get_clipboard_content()?;
+
+    // Create a tar file in tmp dir
+    if let ClipboardContent::Dir { path, archive_file } = &mut clipboard_content {
+        let tar_file = Path::join(&env::temp_dir(), rand_alphanumeric(RAND_FILE_NAME_LEN));
+        tar_dir(Path::new(path), &tar_file)?;
+        *archive_file = Some(tar_file.to_string_lossy().to_string());
+    };
 
     // Obtain metadata and content streams
     let meta_stream = Cursor::new(clipboard_content.metadata()?.to_bytes());
@@ -84,9 +142,26 @@ fn send_clipboard_content(
     log(&match &clipboard_content {
         ClipboardContent::Text(_) => format!("Sending text to {}", &client_addr),
         ClipboardContent::File(p) => format!("Sending file {} to {}", p, &client_addr),
+        ClipboardContent::Dir {
+            path,
+            archive_file: _,
+        } => format!("Sending directory {} to {}", path, &client_addr),
     });
     let bytes_written = io::copy(&mut stream, &mut client_stream)?;
     log(&format!("Sent {} bytes to {}", bytes_written, &client_addr));
+
+    // Delete the tmp tar file
+    if let ClipboardContent::Dir {
+        path: _,
+        archive_file,
+    } = &clipboard_content
+    {
+        if let Some(f) = archive_file {
+            fs::remove_file(f)?;
+            log(&format!("Removed temporary file {}", f));
+        }
+    }
+
     Ok(())
 }
 
