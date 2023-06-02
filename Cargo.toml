@@ -23,3 +23,4 @@ hmac = "0.12.1"
 pbkdf2 = "0.12.1"
 sha2 = "0.10.6"
 flate2 = { version = "1.0.26", features = ["zlib"], default-features = false }
+tar = "0.4.38"
