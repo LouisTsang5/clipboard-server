@@ -31,10 +31,9 @@ pub fn log(msg: &str) {
 pub fn print_progress(percentage: f32, bar_width: usize) {
     let num_bars = (percentage * bar_width as f32) as usize;
     let bar_str = format!(
-        " {:.1}%[{}{}{}]\r",
+        "\r{:.1}%[{}{}]",
         percentage * 100 as f32,
         "=".repeat(num_bars),
-        ">",
         " ".repeat(bar_width - num_bars),
     );
     let mut stdout = std::io::stdout();
