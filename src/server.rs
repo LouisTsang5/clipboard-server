@@ -127,14 +127,17 @@ fn send_clipboard_content(
     };
 
     // Obtain metadata and content streams
-    let meta_stream = Cursor::new(clipboard_content.metadata()?.to_bytes());
+    let metadata = clipboard_content.metadata()?;
+    let meta_stream = {
+        let mut bytes = metadata.to_bytes();
+        bytes.push(END_OF_MSG); // EOM between metadata and the actual content
+        Cursor::new(bytes)
+    };
     let content_stream = clipboard_content.content_stream()?;
 
     // Construct the output stream
     // Data -> Encryption -> Compression
-    let stream = meta_stream
-        .chain(Cursor::new([END_OF_MSG])) // EOF between metadata and the actual content
-        .chain(content_stream);
+    let stream = meta_stream.chain(content_stream);
     let stream = EncryptionStream::new(enc_key, stream, enc_block_size);
     let mut stream = ZlibEncoder::new(stream, Compression::default());
 
