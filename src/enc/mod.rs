@@ -9,6 +9,7 @@ const KEY_LEN: usize = 32;
 const SALT_LEN: usize = 8;
 const KEY_GEN_ROUNDS: u32 = 10_000;
 const NONCE_LEN: usize = 12;
+const AES_GCM_AUTH_TAG_LEN: usize = 16;
 
 struct EncryptionBlock {
     ciphertext: Vec<u8>,
@@ -17,7 +18,7 @@ struct EncryptionBlock {
 
 impl EncryptionBlock {
     fn enc_block_size(plaintext_block_size: usize) -> usize {
-        plaintext_block_size + 16 + std::mem::size_of::<usize>()
+        plaintext_block_size + AES_GCM_AUTH_TAG_LEN + std::mem::size_of::<usize>()
     }
 
     fn to_bytes(&self) -> Vec<u8> {
