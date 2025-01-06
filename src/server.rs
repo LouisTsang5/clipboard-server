@@ -153,13 +153,11 @@ fn send_clipboard_content(
     // Delete the tmp tar file
     if let ClipboardContent::Dir {
         path: _,
-        archive_file,
+        archive_file: Some(f),
     } = &clipboard_content
     {
-        if let Some(f) = archive_file {
-            fs::remove_file(f)?;
-            log!("Removed temporary file {}", f);
-        }
+        fs::remove_file(f)?;
+        log!("Removed temporary file {}", f);
     }
 
     Ok(())
@@ -172,7 +170,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let enc_block_size = env::var("ENC_BLOCK_SIZE").unwrap_or("1024".to_string());
     let enc_block_size = enc_block_size
         .parse::<usize>()
-        .expect(&format!("{} is not a valid block size", enc_block_size));
+        .unwrap_or_else(|_| panic!("{} is not a valid block size", enc_block_size));
     log!("Encryption block size: {}", enc_block_size);
     let port = env::var("PORT")
         .expect("Variable PORT is not set")
@@ -182,7 +180,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Start server
     log!("Listening on port {}...", port);
     let listener = TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
-        .expect(&format!("Failed to listen on port {}", port));
+        .unwrap_or_else(|e| panic!("Failed to listen on port {} ({})", port, e));
     for stream in listener.incoming() {
         let stream = stream?;
         let sock_addr = stream.peer_addr()?;

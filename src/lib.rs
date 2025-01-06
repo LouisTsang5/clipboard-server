@@ -37,7 +37,7 @@ pub fn print_progress(percentage: f32, bar_width: usize) {
     write!(
         &mut stdout,
         "\r{:.1}%[{}{}]",
-        percentage * 100 as f32,
+        percentage * 100_f32,
         "=".repeat(num_bars),
         " ".repeat(bar_width - num_bars)
     )
@@ -97,7 +97,7 @@ impl TryFrom<&[u8]> for Metadata {
                 let name = String::from_utf8(value[COMMON_HEADER_SIZE..].to_vec())?;
                 Ok(Metadata::File { name, size })
             }
-            _ => return Err("Metadata malformed (Invalid metadata type)".into()),
+            _ => Err("Metadata malformed (Invalid metadata type)".into()),
         }
     }
 }

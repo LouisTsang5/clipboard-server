@@ -47,7 +47,7 @@ struct EncryptionBlockIter<'a> {
     ciphertext_iter: std::slice::Iter<'a, u8>,
 }
 
-impl<'a> Iterator for EncryptionBlockIter<'a> {
+impl Iterator for EncryptionBlockIter<'_> {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -168,10 +168,10 @@ impl<T: Read> EncryptionStream<T> {
 impl<T: Read> Read for EncryptionStream<T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // If intermediate buffer is empty, encrypt and push to buffer
-        if self.encrypted_buff.len() <= 0 {
+        if self.encrypted_buff.is_empty() {
             // Read plain text into buffer
             let bytes_read = self.stream.read(&mut self.plaintext_buff)?;
-            if bytes_read <= 0 {
+            if bytes_read == 0 {
                 return Ok(0);
             }
             let padding_len = self.block_size - bytes_read;
@@ -269,7 +269,7 @@ impl<T: Read> DecryptionStream<T> {
 impl<T: Read> Read for DecryptionStream<T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Decrypt a block and store it to inter buff
-        if self.plaintext_buff.len() <= 0 {
+        if self.plaintext_buff.is_empty() {
             // Read encrypted bytes
             let enc_block_size = EncryptionBlock::enc_block_size(self.block_size);
             let mut total_bytes_read = 0;
@@ -278,13 +278,13 @@ impl<T: Read> Read for DecryptionStream<T> {
                     .stream
                     .read(&mut self.encrypted_buff[total_bytes_read..])?;
                 total_bytes_read += bytes_read;
-                if bytes_read <= 0 || total_bytes_read >= enc_block_size {
+                if bytes_read == 0 || total_bytes_read >= enc_block_size {
                     break;
                 }
             }
 
             // Return EOF if no bytes can be read
-            if total_bytes_read <= 0 {
+            if total_bytes_read == 0 {
                 return Ok(0);
             }
 
@@ -309,7 +309,7 @@ impl<T: Read> Read for DecryptionStream<T> {
                     ))
                 }
             };
-            let dec_bytes = match self.cipher.decrypt(&self.nonce.into(), &ciphertext[..]) {
+            let dec_bytes = match self.cipher.decrypt(&self.nonce.into(), ciphertext) {
                 Ok(b) => b,
                 Err(e) => {
                     return Err(std::io::Error::new(

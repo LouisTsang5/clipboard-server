@@ -63,13 +63,13 @@ fn request() -> Result<(), Box<dyn Error>> {
                 if bytes_read == 0 {
                     return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
                 }
-                file.write(&buff[..bytes_read])?;
+                file.write_all(&buff[..bytes_read])?;
                 total_bytes_read += bytes_read;
                 print_progress(total_bytes_read as f32 / size as f32, 50);
             }
         }
     }
-    println!("");
+    println!();
     Ok(())
 }
 
@@ -82,10 +82,10 @@ fn main() {
     // Halt to show result
     let mut stdout = io::stdout();
     stdout
-        .write("Press Enter to exit the program...".as_bytes())
+        .write_all("Press Enter to exit the program...".as_bytes())
         .unwrap();
     stdout.flush().unwrap();
     let mut stdin = io::stdin();
     let mut tmp_buff = [0u8];
-    stdin.read(&mut tmp_buff).unwrap();
+    stdin.read_exact(&mut tmp_buff).unwrap();
 }
