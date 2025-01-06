@@ -33,15 +33,15 @@ macro_rules! log {
 
 pub fn print_progress(percentage: f32, bar_width: usize) {
     let num_bars = (percentage * bar_width as f32) as usize;
-    let bar_str = format!(
+    let mut stdout = std::io::stdout();
+    write!(
+        &mut stdout,
         "\r{:.1}%[{}{}]",
         percentage * 100 as f32,
         "=".repeat(num_bars),
-        " ".repeat(bar_width - num_bars),
-    );
-    let mut stdout = std::io::stdout();
-    stdout.write(&bar_str.as_bytes()).unwrap();
-    stdout.flush().unwrap();
+        " ".repeat(bar_width - num_bars)
+    )
+    .unwrap();
 }
 
 #[derive(Debug)]
