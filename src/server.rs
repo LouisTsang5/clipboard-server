@@ -88,22 +88,19 @@ fn get_clipboard_content() -> Result<ClipboardContent, Box<dyn Error>> {
         let metadata = fs::metadata(&path)?;
         match metadata.is_dir() {
             true => {
-                log(&format!("Clipboard points to the directory {}", path));
+                log!("Clipboard points to the directory {}", path);
                 Ok(ClipboardContent::Dir {
                     path,
                     archive_file: None,
                 })
             }
             false => {
-                log(&format!("Clipboard points to the file {}", path));
+                log!("Clipboard points to the file {}", path);
                 Ok(ClipboardContent::File(path))
             }
         }
     } else {
-        log(&format!(
-            "Clipboard contains text with length {}",
-            clipboard.len()
-        ));
+        log!("Clipboard contains text with length {}", clipboard.len());
         Ok(ClipboardContent::Text(clipboard))
     }
 }
@@ -142,16 +139,16 @@ fn send_clipboard_content(
     let mut stream = ZlibEncoder::new(stream, Compression::default());
 
     // Stream the message
-    log(&match &clipboard_content {
-        ClipboardContent::Text(_) => format!("Sending text to {}", &client_addr),
-        ClipboardContent::File(p) => format!("Sending file {} to {}", p, &client_addr),
+    match &clipboard_content {
+        ClipboardContent::Text(_) => log!("Sending text to {}", &client_addr),
+        ClipboardContent::File(p) => log!("Sending file {} to {}", p, &client_addr),
         ClipboardContent::Dir {
             path,
             archive_file: _,
-        } => format!("Sending directory {} to {}", path, &client_addr),
-    });
+        } => log!("Sending directory {} to {}", path, &client_addr),
+    };
     let bytes_written = io::copy(&mut stream, &mut client_stream)?;
-    log(&format!("Sent {} bytes to {}", bytes_written, &client_addr));
+    log!("Sent {} bytes to {}", bytes_written, &client_addr);
 
     // Delete the tmp tar file
     if let ClipboardContent::Dir {
@@ -161,7 +158,7 @@ fn send_clipboard_content(
     {
         if let Some(f) = archive_file {
             fs::remove_file(f)?;
-            log(&format!("Removed temporary file {}", f));
+            log!("Removed temporary file {}", f);
         }
     }
 
@@ -176,14 +173,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let enc_block_size = enc_block_size
         .parse::<usize>()
         .expect(&format!("{} is not a valid block size", enc_block_size));
-    log(&format!("Encryption block size: {}", enc_block_size));
+    log!("Encryption block size: {}", enc_block_size);
     let port = env::var("PORT")
         .expect("Variable PORT is not set")
         .parse::<u16>()
         .expect("PORT must be a non negative integer");
 
     // Start server
-    log(&format!("Listening on port {}...", port));
+    log!("Listening on port {}...", port);
     let listener = TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
         .expect(&format!("Failed to listen on port {}", port));
     for stream in listener.incoming() {

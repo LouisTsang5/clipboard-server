@@ -20,11 +20,11 @@ fn list_dir(dir: &Path, list: &mut Vec<String>) -> io::Result<()> {
 }
 
 pub fn tar_dir(dir: &Path, output_path: &Path) -> Result<(), io::Error> {
-    log(&format!(
+    log!(
         "Creating tar archive {} for {}",
         output_path.to_string_lossy(),
         dir.to_string_lossy()
-    ));
+    );
 
     let files = {
         const DEFAULT_FILE_LIST_CAPACITY: usize = 256;
@@ -32,24 +32,17 @@ pub fn tar_dir(dir: &Path, output_path: &Path) -> Result<(), io::Error> {
         list_dir(dir, &mut files)?;
         files
     };
-    log(&format!(
-        "Found {} files in {}",
-        files.len(),
-        dir.to_string_lossy()
-    ));
+    log!("Found {} files in {}", files.len(), dir.to_string_lossy());
 
     let tar_file = File::create(output_path)?;
     let mut tar_file = tar::Builder::new(tar_file);
     for f in files {
         let relative_path = Path::new(&f).strip_prefix(dir).unwrap();
         let mut file = File::open(&f)?;
-        log(&format!("Appending {}", relative_path.to_string_lossy()));
+        log!("Appending {}", relative_path.to_string_lossy());
         tar_file.append_file(relative_path, &mut file)?;
     }
 
-    log(&format!(
-        "Tar archive created as {}",
-        output_path.to_string_lossy()
-    ));
+    log!("Tar archive created as {}", output_path.to_string_lossy());
     tar_file.finish()
 }

@@ -20,12 +20,15 @@ pub fn rand_alphanumeric(len: usize) -> String {
     s
 }
 
-pub fn log(msg: &str) {
-    println!(
-        "[{}] {}",
-        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-        msg
-    );
+#[macro_export]
+macro_rules! log {
+    ($arg0:tt, $($arg:tt)*) => {
+        println!(
+            concat!("[{}] ", $arg0),
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            $($arg)*
+        );
+    };
 }
 
 pub fn print_progress(percentage: f32, bar_width: usize) {
