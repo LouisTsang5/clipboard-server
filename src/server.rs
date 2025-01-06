@@ -163,14 +163,18 @@ fn send_clipboard_content(
     Ok(())
 }
 
+const DEFAULT_ENC_BLOCK_SIZE: usize = 1024;
+
 fn main() -> Result<(), Box<dyn Error>> {
     // Read env
     dotenvy::dotenv()?;
     let enc_key = env::var("KEY").expect("Variable KEY is not set");
-    let enc_block_size = env::var("ENC_BLOCK_SIZE").unwrap_or("1024".to_string());
-    let enc_block_size = enc_block_size
-        .parse::<usize>()
-        .unwrap_or_else(|_| panic!("{} is not a valid block size", enc_block_size));
+    let enc_block_size = match env::var("ENC_BLOCK_SIZE") {
+        Err(_) => DEFAULT_ENC_BLOCK_SIZE,
+        Ok(s) => s
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("{} is not a valid block size", s)),
+    };
     log!("Encryption block size: {}", enc_block_size);
     let port = env::var("PORT")
         .expect("Variable PORT is not set")
