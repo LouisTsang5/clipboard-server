@@ -134,7 +134,7 @@ pub struct EncryptionStream<T: Read> {
     block_size: usize,
     stream: T,
     encrypted_buff: Vec<u8>,
-    plaintext_buff: Vec<u8>,
+    plaintext_buff: Box<[u8]>,
 }
 
 impl<T: Read> EncryptionStream<T> {
@@ -160,7 +160,7 @@ impl<T: Read> EncryptionStream<T> {
             block_size,
             stream,
             encrypted_buff,
-            plaintext_buff: vec![0u8; block_size],
+            plaintext_buff: vec![0u8; block_size].into(),
         }
     }
 }
@@ -206,7 +206,7 @@ pub struct DecryptionStream<T: Read> {
     block_size: usize,
     stream: T,
     plaintext_buff: Vec<u8>,
-    encrypted_buff: Vec<u8>,
+    encrypted_buff: Box<[u8]>,
 }
 
 impl<T: Read> DecryptionStream<T> {
@@ -241,7 +241,7 @@ impl<T: Read> DecryptionStream<T> {
             block_size,
             stream,
             plaintext_buff: Vec::with_capacity(block_size),
-            encrypted_buff: vec![0u8; EncryptionBlock::enc_block_size(block_size)],
+            encrypted_buff: vec![0u8; EncryptionBlock::enc_block_size(block_size)].into(),
         })
     }
 }
