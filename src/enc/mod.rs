@@ -195,10 +195,9 @@ impl<T: Read> Read for EncryptionStream<T> {
             true => self.encrypted_buff.len(),
             false => buf.len(),
         };
-        buf[..read_len].copy_from_slice(&self.encrypted_buff[..read_len]);
-
-        // Trim the intermediate buffer
-        self.encrypted_buff.drain(0..read_len);
+        for (i, b) in self.encrypted_buff.drain(..read_len).enumerate() {
+            buf[i] = b;
+        }
 
         Ok(read_len)
     }
@@ -306,10 +305,9 @@ impl<T: Read> Read for DecryptionStream<T> {
             true => self.plaintext_buff.len(),
             false => buf.len(),
         };
-        buf[..read_len].copy_from_slice(&self.plaintext_buff[..read_len]);
-
-        // Trim the intermediate buffer
-        self.plaintext_buff.drain(0..read_len);
+        for (i, b) in self.plaintext_buff.drain(..read_len).enumerate() {
+            buf[i] = b;
+        }
 
         Ok(read_len)
     }
