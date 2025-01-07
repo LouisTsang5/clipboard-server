@@ -177,18 +177,10 @@ impl<T: Read> Read for EncryptionStream<T> {
             let padding_len = self.block_size - bytes_read;
 
             // Encrypt text
-            let ciphertext = match self
+            let ciphertext = self
                 .cipher
                 .encrypt(&self.nonce.into(), &self.plaintext_buff[..])
-            {
-                Ok(b) => b,
-                Err(e) => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("{}", e),
-                    ))
-                }
-            };
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
             // Format and store ciphertexgt
             let enc_block = EncryptionBlock {
@@ -222,32 +214,24 @@ pub struct DecryptionStream<T: Read> {
 }
 
 impl<T: Read> DecryptionStream<T> {
-    pub fn new(password: &str, mut stream: T) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(password: &str, mut stream: T) -> std::io::Result<Self> {
         // Read salt
         let mut salt: Salt = [0; SALT_LEN];
-        if let Err(e) = stream.read_exact(&mut salt) {
-            return Err(
-                std::io::Error::new(e.kind(), format!("Unable to determine salt. ({e})")).into(),
-            );
-        }
+        stream.read_exact(&mut salt).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("Unable to determine salt. ({})", e))
+        })?;
 
         // Read nonce
         let mut nonce: Nonce = [0; NONCE_LEN];
-        if let Err(e) = stream.read_exact(&mut nonce) {
-            return Err(
-                std::io::Error::new(e.kind(), format!("Unable to determine nonce. ({e})")).into(),
-            );
-        }
+        stream.read_exact(&mut nonce).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("Unable to determine nonce. ({})", e))
+        })?;
 
         // Read block size
         let mut block_size = [0u8; std::mem::size_of::<usize>()];
-        if let Err(e) = stream.read_exact(&mut block_size) {
-            return Err(std::io::Error::new(
-                e.kind(),
-                format!("Unable to determine block size. ({e})"),
-            )
-            .into());
-        }
+        stream.read_exact(&mut block_size).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("Unable to determine block size. ({})", e))
+        })?;
         let block_size = usize::from_le_bytes(block_size);
 
         // Derive key and cipher
@@ -309,15 +293,10 @@ impl<T: Read> Read for DecryptionStream<T> {
                     ))
                 }
             };
-            let dec_bytes = match self.cipher.decrypt(&self.nonce.into(), ciphertext) {
-                Ok(b) => b,
-                Err(e) => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("{}", e),
-                    ))
-                }
-            };
+            let dec_bytes = self
+                .cipher
+                .decrypt(&self.nonce.into(), ciphertext)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             self.plaintext_buff
                 .extend_from_slice(&dec_bytes[..dec_bytes.len() - padding_len]);
         }
