@@ -191,10 +191,7 @@ impl<T: Read> Read for EncryptionStream<T> {
         }
 
         // Fill the buffer
-        let read_len = match buf.len() > self.encrypted_buff.len() {
-            true => self.encrypted_buff.len(),
-            false => buf.len(),
-        };
+        let read_len = std::cmp::min(self.encrypted_buff.len(), buf.len());
         for (i, b) in self.encrypted_buff.drain(..read_len).enumerate() {
             buf[i] = b;
         }
@@ -301,10 +298,7 @@ impl<T: Read> Read for DecryptionStream<T> {
         }
 
         // Fill the buffer
-        let read_len = match buf.len() > self.plaintext_buff.len() {
-            true => self.plaintext_buff.len(),
-            false => buf.len(),
-        };
+        let read_len = std::cmp::min(self.plaintext_buff.len(), buf.len());
         for (i, b) in self.plaintext_buff.drain(..read_len).enumerate() {
             buf[i] = b;
         }
