@@ -1,11 +1,70 @@
 use aes_gcm::aead::rand_core::RngCore;
-use std::{error::Error, io::Write, mem::size_of};
+use std::{error::Error, io::Write, mem::size_of, ops::Deref};
 
 pub const END_OF_MSG: u8 = 0;
 pub const END_OF_MSG_SIZE: usize = std::mem::size_of::<u8>();
 
 pub mod enc;
 pub mod tar;
+
+pub struct Size(pub usize);
+
+impl Deref for Size {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const SUFFIXES: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
+        const CHUNK_SIZE: f64 = 1024.0;
+        let mut size_remainer = **self as f64;
+        let mut suffix_index = 0;
+        while size_remainer >= CHUNK_SIZE {
+            size_remainer /= CHUNK_SIZE;
+            suffix_index += 1;
+        }
+        write!(
+            f,
+            "{:.2}{}",
+            size_remainer,
+            SUFFIXES[std::cmp::min(SUFFIXES.len() - 1, suffix_index)]
+        )
+    }
+}
+
+#[test]
+fn test_size_display_512b() {
+    let size = Size(512);
+    assert_eq!("512.00B", format!("{size}"));
+}
+
+#[test]
+fn test_size_display_1kb() {
+    let size = Size(1024);
+    assert_eq!("1.00KB", format!("{size}"));
+}
+
+#[test]
+fn test_size_display_1mb() {
+    let size = Size(1024 * 1024);
+    assert_eq!("1.00MB", format!("{size}"));
+}
+
+#[test]
+fn test_size_display_2mb() {
+    let size = Size(1024 * 1024 * 2);
+    assert_eq!("2.00MB", format!("{size}"));
+}
+
+#[test]
+fn test_size_display_211881849b() {
+    let size = Size(211881849);
+    assert_eq!("202.07MB", format!("{size}"));
+}
 
 pub fn rand_alphanumeric(len: usize) -> String {
     const CHARS: [(u8, u8); 3] = [(b'a', b'z'), (b'A', b'Z'), (b'0', b'9')];

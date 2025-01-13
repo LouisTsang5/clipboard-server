@@ -27,7 +27,7 @@ The server and the client expects a ***.env*** file present at the ***$PWD***.
 ```bash
 PORT = 3001 # TCP port to listen to
 KEY = password # Encryption key
-ENC_BLOCK_SIZE = 1024 # AES encryption block size (Optional, default to 1024)
+ENC_BLOCK_SIZE = 1024 # AES encryption block size in bytes (Optional, default to 1MB)
 ```
 
 ### Client Env

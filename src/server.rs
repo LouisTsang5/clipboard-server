@@ -8,7 +8,7 @@ use std::{
 };
 
 use clipboard_server::{
-    enc::EncryptionStream, log, rand_alphanumeric, tar::tar_dir, Metadata, END_OF_MSG,
+    enc::EncryptionStream, log, rand_alphanumeric, tar::tar_dir, Metadata, Size, END_OF_MSG,
 };
 use flate2::{read::ZlibEncoder, Compression};
 
@@ -148,7 +148,11 @@ fn send_clipboard_content(
         } => log!("Sending directory {} to {}", path, &client_addr),
     };
     let bytes_written = io::copy(&mut stream, &mut client_stream)?;
-    log!("Sent {} bytes to {}", bytes_written, &client_addr);
+    log!(
+        "Sent {} bytes to {}",
+        Size(bytes_written as usize),
+        &client_addr
+    );
 
     // Delete the tmp tar file
     if let ClipboardContent::Dir {
@@ -163,7 +167,7 @@ fn send_clipboard_content(
     Ok(())
 }
 
-const DEFAULT_ENC_BLOCK_SIZE: usize = 1024;
+const DEFAULT_ENC_BLOCK_SIZE: usize = 1024 * 1024;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Read env
@@ -175,7 +179,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .parse::<usize>()
             .unwrap_or_else(|_| panic!("{} is not a valid block size", s)),
     };
-    log!("Encryption block size: {}", enc_block_size);
+    log!("Encryption block size: {}", Size(enc_block_size));
     let port = env::var("PORT")
         .expect("Variable PORT is not set")
         .parse::<u16>()
