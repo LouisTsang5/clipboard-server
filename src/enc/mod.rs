@@ -244,6 +244,10 @@ impl<T: Read> DecryptionStream<T> {
             encrypted_buff: vec![0u8; EncryptionBlock::enc_block_size(block_size)].into(),
         })
     }
+
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
 }
 
 impl<T: Read> Read for DecryptionStream<T> {

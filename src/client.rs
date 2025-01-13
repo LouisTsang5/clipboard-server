@@ -44,6 +44,7 @@ fn request() -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(target)?;
     let stream = ZlibDecoder::new(stream);
     let mut stream = DecryptionStream::new(&dec_key, stream)?;
+    let mut buff = vec![0u8; stream.block_size()];
 
     // Read content
     let metadata = read_metadata(&mut stream)?;
@@ -56,7 +57,6 @@ fn request() -> Result<(), Box<dyn Error>> {
             // Get the file while printing the progression
             println!("Getting {}...", name);
             let mut file = File::create(env::current_dir()?.join(&name))?;
-            let mut buff = [0; 1024];
             let mut total_bytes_read = 0;
             while total_bytes_read < size {
                 let bytes_read = stream.read(&mut buff)?;
